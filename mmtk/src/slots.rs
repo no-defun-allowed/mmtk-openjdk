@@ -201,6 +201,8 @@ impl<const COMPRESSED: bool> Slot for OpenJDKSlot<COMPRESSED> {
             unsafe { self.addr.store(object) }
         }
     }
+
+    fn as_address(&self) -> Address { self.addr }
 }
 
 /// A range of OpenJDKSlot, usually used for arrays.

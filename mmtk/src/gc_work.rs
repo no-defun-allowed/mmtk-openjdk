@@ -81,9 +81,18 @@ impl<const COMPRESSED: bool, F: RootsWorkFactory<OpenJDKSlot<COMPRESSED>>>
         let mut nursery_slots = 0;
         let mut mature_slots = 0;
 
-        let mut add_roots = |roots: &[Address]| {
+        #[cfg(debug_assertions)]
+        use std::collections::HashMap;
+        #[cfg(debug_assertions)]
+        let mut all_slots = HashMap::new();
+        let mut add_roots = |roots: &[Address], _nmethod: Address| {
             for root in roots {
-                slots.push(OpenJDKSlot::<COMPRESSED>::from(*root));
+                let slot = OpenJDKSlot::<COMPRESSED>::from(*root);
+                #[cfg(debug_assertions)]
+                if let Some(old_nmethod) = all_slots.insert(slot, _nmethod) {
+                    panic!("{slot:?} should be unique to {_nmethod} but it was in {old_nmethod} before");
+                }
+                slots.push(slot);
                 if slots.len() >= scanning::WORK_PACKET_CAPACITY {
                     self.factory
                         .create_process_roots_work(std::mem::take(&mut slots));
@@ -96,9 +105,9 @@ impl<const COMPRESSED: bool, F: RootsWorkFactory<OpenJDKSlot<COMPRESSED>>>
 
             // Only scan mature roots in full-heap collections.
             if !is_current_gc_nursery {
-                for roots in mature.values() {
+                for (key, roots) in mature.iter() {
                     mature_slots += roots.len();
-                    add_roots(roots);
+                    add_roots(roots, *key);
                 }
             }
 
@@ -106,7 +115,7 @@ impl<const COMPRESSED: bool, F: RootsWorkFactory<OpenJDKSlot<COMPRESSED>>>
                 let mut nursery = crate::NURSERY_CODE_CACHE_ROOTS.lock().unwrap();
                 for (key, roots) in nursery.drain() {
                     nursery_slots += roots.len();
-                    add_roots(&roots);
+                    add_roots(&roots, key);
                     mature.insert(key, roots);
                 }
             }
