@@ -84,13 +84,13 @@ impl<const COMPRESSED: bool, F: RootsWorkFactory<OpenJDKSlot<COMPRESSED>>>
         #[cfg(debug_assertions)]
         use std::collections::HashMap;
         #[cfg(debug_assertions)]
-        let mut all_slots = HashMap::new();
-        let mut add_roots = |roots: &[Address], _nmethod: Address| {
+        let mut all_slots = HashMap::<OpenJDKSlot::<COMPRESSED>, (Address, usize)>::new();
+        let mut add_roots = |roots: &[Address], _key: (Address, usize)| {
             for root in roots {
                 let slot = OpenJDKSlot::<COMPRESSED>::from(*root);
                 #[cfg(debug_assertions)]
-                if let Some(old_nmethod) = all_slots.insert(slot, _nmethod) {
-                    panic!("{slot:?} should be unique to {_nmethod} but it was in {old_nmethod} before");
+                if let Some(old_key) = all_slots.insert(slot, _key) {
+                    panic!("{slot:?} should be unique to {_key:?} but it was in {old_key:?} before");
                 }
                 slots.push(slot);
                 if slots.len() >= scanning::WORK_PACKET_CAPACITY {
@@ -105,17 +105,17 @@ impl<const COMPRESSED: bool, F: RootsWorkFactory<OpenJDKSlot<COMPRESSED>>>
 
             // Only scan mature roots in full-heap collections.
             if !is_current_gc_nursery {
-                for (key, roots) in mature.iter() {
+                for (n, (key, roots)) in mature.iter().enumerate() {
                     mature_slots += roots.len();
-                    add_roots(roots, *key);
+                    add_roots(roots, (*key, n));
                 }
             }
 
             {
                 let mut nursery = crate::NURSERY_CODE_CACHE_ROOTS.lock().unwrap();
-                for (key, roots) in nursery.drain() {
+                for (n, (key, roots)) in nursery.drain().enumerate() {
                     nursery_slots += roots.len();
-                    add_roots(&roots, key);
+                    add_roots(&roots, (key, n));
                     mature.insert(key, roots);
                 }
             }
